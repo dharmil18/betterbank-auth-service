@@ -2,6 +2,7 @@ package com.betterbank.service;
 
 import com.betterbank.dto.request.LoginRequest;
 import com.betterbank.dto.request.RegisterRequest;
+import com.betterbank.dto.response.GenericResponse;
 import com.betterbank.dto.response.RegistrationOutcome;
 import com.betterbank.providers.AuthProvider;
 import org.springframework.stereotype.Service;
@@ -17,5 +18,9 @@ public class AuthService {
 
     public Mono<RegistrationOutcome> register(RegisterRequest registerRequest) {
         return authProvider.register(registerRequest);
+    }
+
+    public Mono<GenericResponse> login(LoginRequest loginRequest) {
+        return authProvider.login(loginRequest);
     }
 }

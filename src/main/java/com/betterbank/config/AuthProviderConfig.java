@@ -3,7 +3,7 @@ package com.betterbank.config;
 
 import com.betterbank.providers.AuthProvider;
 import com.betterbank.providers.KeycloakAuthProvider;
-import com.betterbank.service.AsyncKeycloakTasksService;
+import com.betterbank.providers.AsyncKeycloakTasksService;
 import org.keycloak.admin.client.Keycloak;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

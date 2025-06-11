@@ -1,4 +1,4 @@
-package com.betterbank.service;
+package com.betterbank.providers;
 
 import com.betterbank.dto.request.RegisterRequest;
 import jakarta.ws.rs.core.Response;
@@ -45,12 +45,14 @@ public class AsyncKeycloakTasksService {
             }
 
             // 2. Create UserRepresentation
-            UserRepresentation user = new UserRepresentation();
-            user.setEnabled(true);
-            user.setUsername(registerRequest.getEmail());
-            user.setEmail(registerRequest.getEmail());
-            user.setFirstName(registerRequest.getFirstName());
-            user.setLastName(registerRequest.getLastName());
+            UserRepresentation userRepresentation = new UserRepresentation();
+            userRepresentation.setEnabled(true);
+            userRepresentation.setUsername(registerRequest.getEmail());
+            userRepresentation.setEmail(registerRequest.getEmail());
+            userRepresentation.setFirstName(registerRequest.getFirstName());
+            userRepresentation.setLastName(registerRequest.getLastName());
+            userRepresentation.setEmailVerified(false);
+            userRepresentation.setRequiredActions(List.of("VERIFY_EMAIL"));
 
             // 3. Set Credentials
             CredentialRepresentation credential = new CredentialRepresentation();
@@ -59,10 +61,10 @@ public class AsyncKeycloakTasksService {
             credential.setTemporary(false);
 
             // set the credentials to the user object
-            user.setCredentials(Collections.singletonList(credential));
+            userRepresentation.setCredentials(Collections.singletonList(credential));
 
             // 4. Create user in Keycloak
-            try (Response response = usersResource.create(user)) {
+            try (Response response = usersResource.create(userRepresentation)) {
                 if (response.getStatus() != HttpStatus.CREATED.value()) {
                     String errorBody = response.readEntity(String.class); // Attempt to read error message from Keycloak
                     log.error("Failed to create user {} in Keycloak. Status: {}, Error: {}", registerRequest.getEmail(), response.getStatus(), errorBody);
@@ -74,11 +76,11 @@ public class AsyncKeycloakTasksService {
                     String path = location.getPath();
                     userId = path.substring(path.lastIndexOf('/') + 1);
                     log.info("User created successfully in Keycloak with ID: {}", userId);
+
+                    log.info("Sending verification email on the email ID: {}",  registerRequest.getEmail());
+                    usersResource.get(userId).sendVerifyEmail();
                 }
             }
-
-            // 5. Send success email
-//            emailService.sendRegistrationCompleteEmail(request.getEmail(), "Your account has been successfully created and is now active!", "Welcome to BetterBank!");
 
             log.info("Asynchronous Keycloak user creation for: {}", registerRequest.getEmail());
 

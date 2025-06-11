@@ -1,6 +1,8 @@
 package com.betterbank.controller;
 
+import com.betterbank.dto.request.LoginRequest;
 import com.betterbank.dto.request.RegisterRequest;
+import com.betterbank.dto.response.GenericResponse;
 import com.betterbank.dto.response.RegistrationOutcome;
 import com.betterbank.providers.KeycloakAuthProvider;
 import com.betterbank.service.AuthService;
@@ -31,5 +33,11 @@ public class AuthController {
     public Mono<RegistrationOutcome> registerUser(@RequestBody RegisterRequest user) {
         log.info("Handling request for /api/auth/register");
         return authService.register(user);
+    }
+
+    @PostMapping("/login")
+    public Mono<GenericResponse> loginUser(@RequestBody LoginRequest user) {
+        log.info("Handling request for /api/auth/login");
+        return authService.login(user);
     }
 }
