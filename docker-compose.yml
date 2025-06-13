@@ -19,8 +19,12 @@ services:
     ports:
       - "8080:8080"
       - "7443:7443"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
     networks:
       - local_network
+volumes:
+  keycloak_data:
 networks:
   local_network:
     driver: bridge

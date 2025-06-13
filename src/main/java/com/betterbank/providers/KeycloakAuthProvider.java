@@ -41,7 +41,8 @@ public class KeycloakAuthProvider implements AuthProvider {
 
     @Value("${app.config.keycloak.client-secret}")
     private String keycloakClientSecret;
-//
+
+    //
 //    @Value("${app.config.keycloak.admin.username}")
 //    private String keycloakAdminUsername;
 //
@@ -53,7 +54,6 @@ public class KeycloakAuthProvider implements AuthProvider {
 //
 //    @Value("${app.config.keycloak.admin.client-secret}")
 //    private String keycloakAdminClientSecret;
-
     public KeycloakAuthProvider(WebClient.Builder webClientBuilder, Keycloak keycloakAdminClient, AsyncKeycloakTasksService asyncKeycloakTasksService) {
         this.webClient = webClientBuilder.build();
         this.keycloakAdminClient = keycloakAdminClient;
@@ -63,24 +63,30 @@ public class KeycloakAuthProvider implements AuthProvider {
 
     @Override
     public Mono<RegistrationOutcome> register(RegisterRequest registerRequest) {
+        log.info("Processing registration request for email: {}", registerRequest.getEmail());
+
         return Mono.fromCallable(() -> {
-            UsersResource usersResource = this.keycloakAdminClient.realm(this.keycloakRealm).users();
+                    UsersResource usersResource = this.keycloakAdminClient.realm(this.keycloakRealm).users();
 
-            if (!usersResource.searchByUsername(registerRequest.getEmail(), true).isEmpty() || !usersResource.searchByEmail(registerRequest.getEmail(), true).isEmpty()) {
-                log.error("User with this email is already registered. Try again with a new email.");
-                return RegistrationOutcome.USER_EXISTS;
-//                throw new IllegalArgumentException("User with this email is already registered. Try again with a new email.");
-            }
+                    log.debug("Checking is user already exists in Keycloak realm: {}", this.keycloakRealm);
 
-            // call async method here
-//            asyncKeycloakTasksService.createUserInKeycloak(registerRequest);
-            log.info("Sending request to AsyncKeycloakTasksService to asynchronously create a user for : {}", registerRequest.getEmail());
-            asyncKeycloakTasksService.createUserInKeycloak(registerRequest);
+                    if (!usersResource.searchByUsername(registerRequest.getEmail(), true).isEmpty() || !usersResource.searchByEmail(registerRequest.getEmail(), true).isEmpty()) {
+                        log.warn("Registration failed: User with email {} already exists", registerRequest.getEmail());
+                        return RegistrationOutcome.USER_EXISTS;
+                    }
+
+                    // call async method here
+                    log.info("User does not exist, delegating user creation to AsyncKeycloakTaskService for: {}", registerRequest.getEmail());
+                    asyncKeycloakTasksService.createUserInKeycloak(registerRequest);
 
 
-            // return a temp response
-            return RegistrationOutcome.INITIATED_ASYNC_PROCESS;
-        }).subscribeOn(Schedulers.boundedElastic());
+                    // return a temp response
+                    return RegistrationOutcome.INITIATED_ASYNC_PROCESS;
+                }).subscribeOn(Schedulers.boundedElastic())
+                .onErrorResume(error -> {
+                    log.error("Registration failed for user {}: {}", registerRequest.getEmail(), error.getMessage());
+                    return Mono.just(RegistrationOutcome.AUTH_PROVIDER_ERROR);
+                });
     }
 
     @Override

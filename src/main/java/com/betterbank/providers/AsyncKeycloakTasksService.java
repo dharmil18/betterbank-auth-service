@@ -36,13 +36,13 @@ public class AsyncKeycloakTasksService {
         try {
             UsersResource usersResource = this.keycloakAdminClient.realm(this.keycloakRealm).users();
 
-            // 1. Idempotency Check (Defensive: prevents issues if async task retries or race conditions)
-            List<UserRepresentation> existingUsers = usersResource.searchByEmail(registerRequest.getEmail(), true);
-            if (!existingUsers.isEmpty()) {
-                log.warn("Asynchronous creation skipped: User with email {} already exists in Keycloak (ID: {}).", registerRequest.getEmail(), existingUsers.get(0).getId());
-//                emailService.sendRegistrationCompleteEmail(request.getEmail(), "Your account was already active.", "Registration Already Active");
-                return;
-            }
+//            // 1. Idempotency Check (Defensive: prevents issues if async task retries or race conditions)
+//            List<UserRepresentation> existingUsers = usersResource.searchByEmail(registerRequest.getEmail(), true);
+//            if (!existingUsers.isEmpty()) {
+//                log.warn("Asynchronous creation skipped: User with email {} already exists in Keycloak (ID: {}).", registerRequest.getEmail(), existingUsers.get(0).getId());
+////                emailService.sendRegistrationCompleteEmail(request.getEmail(), "Your account was already active.", "Registration Already Active");
+//                return;
+//            }
 
             // 2. Create UserRepresentation
             UserRepresentation userRepresentation = new UserRepresentation();
@@ -75,14 +75,12 @@ public class AsyncKeycloakTasksService {
                     // Extract user ID from the response header (e.g., Location: /auth/admin/realms/{realm}/users/{userId})
                     String path = location.getPath();
                     userId = path.substring(path.lastIndexOf('/') + 1);
-                    log.info("User created successfully in Keycloak with ID: {}", userId);
+                    log.info("User {} created successfully in Keycloak with ID: {}", registerRequest.getEmail(), userId);
 
-                    log.info("Sending verification email on the email ID: {}",  registerRequest.getEmail());
+                    log.info("Sending verification email on the email ID: {}", registerRequest.getEmail());
                     usersResource.get(userId).sendVerifyEmail();
                 }
             }
-
-            log.info("Asynchronous Keycloak user creation for: {}", registerRequest.getEmail());
 
         } catch (Exception e) {
             log.error("Error during asynchronous Keycloak user creation for {}: {}", registerRequest.getEmail(), e.getMessage(), e);
