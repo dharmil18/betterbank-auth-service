@@ -1,15 +1,26 @@
-version: "3.8"
-
 services:
-  keycloak:
+  my-keycloak:
     image: quay.io/keycloak/keycloak:26.0.5
-    command: start-dev
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG_LEVEL: info
+      JAVA_OPTS: "-Dmail.smtp.timeout=120000 -Dmail.smtp.connectiontimeout=120000 -Dmail.smtp.writetimeout=120000 -Dmail.smtp.starttls.enable=true -Dmail.smtp.ssl.trust=smtp.gmail.com -Dmail.smtp.auth=true -Dmail.debug=true -Dmail.smtp.ssl.protocols=TLSv1.2"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7080/health/ready"]
+      interval: 15s
+      timeout: 2s
+      retries: 15
+    command: ["start-dev", "--http-port", "8080", "--https-port", "7443"]
     ports:
       - "8080:8080"
-    env_file:
-      - .env
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-
-volumes:
-  keycloak_data:
+      - "7443:7443"
+    networks:
+      - local_network
+networks:
+  local_network:
+    driver: bridge
