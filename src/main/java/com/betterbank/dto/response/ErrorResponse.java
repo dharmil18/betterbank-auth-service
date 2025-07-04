@@ -1,32 +1,22 @@
 package com.betterbank.dto.response;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-public class ErrorResponse {
-    private LocalDateTime timestamp = LocalDateTime.now();
-    private int status;
-    private String message;
-    private List<ValidationError> errors = new ArrayList<>();
-
-    public ErrorResponse(int status, String message) {
-        this.status = status;
-        this.message = message;
+public record ErrorResponse(
+        int status,
+        String message,
+        List<ValidationError> errors,
+        LocalDateTime timestamp
+) {
+    public ErrorResponse(int status, String message, List<ValidationError> errors) {
+        this(status, message, errors, LocalDateTime.now());
     }
 
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class ValidationError {
-        private String field;
-        private String message;
+    public ErrorResponse(int status, String message) {
+        this(status, message, List.of(), LocalDateTime.now());
+    }
+
+    public record ValidationError(String field, String message) {
     }
 }

@@ -1,13 +1,9 @@
 package com.betterbank.dto.request;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 
-@NoArgsConstructor
-@AllArgsConstructor
-@Data
-public class LoginRequest {
-    private String email;
-    private String password;
+public record LoginRequest(
+        @NotBlank(message = "Email is required") @Email(message = "Email should be valid") String email,
+        @NotBlank(message = "Password is required") String password) {
 }

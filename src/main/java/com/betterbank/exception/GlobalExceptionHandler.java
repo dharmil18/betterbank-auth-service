@@ -1,27 +1,27 @@
 package com.betterbank.exception;
 
 import com.betterbank.dto.response.ErrorResponse;
-import com.betterbank.dto.response.GenericResponse;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.bind.support.WebExchangeBindException;
-import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 @RestControllerAdvice
-@Slf4j
 public class GlobalExceptionHandler {
-    @ExceptionHandler(WebExchangeBindException.class)
-    public Mono<ResponseEntity<ErrorResponse>> handleWebExchangeBindException(WebExchangeBindException ex) {
-        log.error("Validation Error: {}", ex.getMessage());
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-        ErrorResponse errorResponse = new ErrorResponse(400, "Validation Failed");
-
-        ex.getBindingResult().getFieldErrors().forEach(fieldError -> {
-            errorResponse.getErrors().add(new ErrorResponse.ValidationError(fieldError.getField(), fieldError.getDefaultMessage()));
-        });
-
-        return Mono.just(ResponseEntity.badRequest().body(errorResponse));
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        LOGGER.error("Validation Error: {}", ex.getMessage());
+        List<ErrorResponse.ValidationError> errors = ex.getBindingResult().getFieldErrors().stream()
+                .map(fieldError -> new ErrorResponse.ValidationError(fieldError.getField(), fieldError.getDefaultMessage()))
+                .toList();
+        ErrorResponse errorResponse = new ErrorResponse(400, "Validation Failed", errors);
+        return ResponseEntity.badRequest().body(errorResponse);
     }
+
 }
