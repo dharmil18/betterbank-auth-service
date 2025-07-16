@@ -1,12 +1,25 @@
 package com.betterbank.providers;
 
+import com.betterbank.dto.request.LoginRequest;
 import com.betterbank.dto.request.RegisterRequest;
+import com.betterbank.dto.response.LoginResponse;
+import com.betterbank.dto.response.LoginState;
+import com.betterbank.dto.response.LoginStatus;
 import com.betterbank.dto.response.RegistrationOutcome;
+import feign.FeignException;
+import org.keycloak.OAuth2Constants;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.resource.UsersResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 
 public class KeycloakAuthProvider implements AuthProvider {
@@ -16,6 +29,7 @@ public class KeycloakAuthProvider implements AuthProvider {
 
     private final AsyncKeycloakTasksService asyncKeycloakTasksService;
 
+    private final KeycloakTokenFeignClient keycloakTokenFeignClient;
 
     @Value("${app.config.keycloak.url}")
     private String keycloakUrl;
@@ -42,9 +56,10 @@ public class KeycloakAuthProvider implements AuthProvider {
 //    @Value("${app.config.keycloak.admin.client-secret}")
 //    private String keycloakAdminClientSecret;
 
-    public KeycloakAuthProvider(Keycloak keycloakAdminClient, AsyncKeycloakTasksService asyncKeycloakTasksService) {
+    public KeycloakAuthProvider(Keycloak keycloakAdminClient, AsyncKeycloakTasksService asyncKeycloakTasksService, KeycloakTokenFeignClient keycloakTokenFeignClient) {
         this.keycloakAdminClient = keycloakAdminClient;
         this.asyncKeycloakTasksService = asyncKeycloakTasksService;
+        this.keycloakTokenFeignClient = keycloakTokenFeignClient;
     }
 
     @Override
@@ -79,99 +94,40 @@ public class KeycloakAuthProvider implements AuthProvider {
         }
     }
 
-//    @Override
-//    public Mono<RegistrationOutcome> register(RegisterRequest registerRequest) {
-//        LOG.info("Processing registration request for email: {}", registerRequest.getEmail());
-//
-//        return Mono.fromCallable(() -> {
-//                    UsersResource usersResource = this.keycloakAdminClient.realm(this.keycloakRealm).users();
-//
-//                    LOG.debug("Checking is user already exists in Keycloak realm: {}", this.keycloakRealm);
-//
-//                    if (!usersResource.searchByUsername(registerRequest.getEmail(), true).isEmpty() || !usersResource.searchByEmail(registerRequest.getEmail(), true).isEmpty()) {
-//                        LOG.warn("Registration failed: User with email {} already exists", registerRequest.getEmail());
-//                        return RegistrationOutcome.USER_EXISTS;
-//                    }
-//
-//                    // call async method here
-//                    LOG.info("User does not exist, delegating user creation to AsyncKeycloakTaskService for: {}", registerRequest.getEmail());
-//                    asyncKeycloakTasksService.createUserInKeycloak(registerRequest);
-//
-//
-//                    // return a temp response
-//                    return RegistrationOutcome.INITIATED_ASYNC_PROCESS;
-//                }).subscribeOn(Schedulers.boundedElastic())
-//                .onErrorResume(error -> {
-//                    LOG.error("Registration failed for user {}: {}", registerRequest.getEmail(), error.getMessage());
-//                    return Mono.just(RegistrationOutcome.AUTH_PROVIDER_ERROR);
-//                });
-//    }
+    @Override
+    public LoginStatus login(LoginRequest loginRequest) {
+        LOGGER.info("Processing login request for email: {}", loginRequest.email());
+        UsersResource usersResource = keycloakAdminClient.realm(keycloakRealm).users();
+        // 1. Check if user does not exist
+        boolean userExists = !usersResource.searchByUsername(loginRequest.email(), true).isEmpty() || !usersResource.searchByEmail(loginRequest.email(), true).isEmpty();
+        if (!userExists) {
+            LOGGER.warn("Login failed: User with email {} does not exist", loginRequest.email());
+            return new LoginStatus(LoginState.INVALID_CREDENTIALS, Optional.empty(), Optional.empty());
+        }
+        // 2. Check if user verification is still pending
+        var userList = usersResource.searchByEmail(loginRequest.email(), true);
+        if (!userList.isEmpty() && userList.get(0).isEnabled() && !userList.get(0).isEmailVerified()) {
+            LOGGER.warn("Login failed: User email verification pending for {}", loginRequest.email());
+            return new LoginStatus(LoginState.EMAIL_NOT_VERIFIED, Optional.empty(), Optional.empty());
+        }
 
-//    @Override
-//    public Mono<GenericResponse> LOGin(LOGinRequest LOGinRequest) {
-//        String tokenUrl = String.format("%s/realms/%s/protocol/openid-connect/token", keycloakUrl, keycloakRealm);
-//        LOG.info("Attempting to LOGin to keycloak at {}", tokenUrl);
-//
-//        // Prepare form data to send to keycloak
-//        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-//        formData.add("grant_type", "password");
-//        formData.add("client_id", keycloakClientId);
-//        formData.add("client_secret", keycloakClientSecret);
-//        formData.add("username", LOGinRequest.getEmail());
-//        formData.add("password", LOGinRequest.getPassword());
-//
-//        return webClient.post().uri(tokenUrl).contentType(MediaType.APPLICATION_FORM_URLENCODED).body(BodyInserters.fromFormData(formData)).retrieve()
-//                // FIX: Change method reference to lambda for instance method
-//                .onStatus(HttpStatusCode::is4xxClientError, clientResponse -> // CORRECTED LINE
-//                        clientResponse.bodyToMono(JsonNode.class).<Throwable>flatMap(errorJson -> {
-//                            String error = errorJson.has("error") ? errorJson.get("error").asText() : "unknown_error";
-//                            String errorDescription = errorJson.has("error_description") ? errorJson.get("error_description").asText() : "No specific error description from Keycloak.";
-//                            LOG.warn("Keycloak LOGin client error for {}: Status={}, Error='{}', Description='{}'", LOGinRequest.getEmail(), clientResponse.statusCode(), error, errorDescription);
-//
-//                            if ("invalid_grant".equals(error) || "invalid_client".equals(error)) {
-//                                return Mono.error(new RuntimeException("INVALID_CREDENTIALS"));
-//                            } else if ("user_not_verified".equals(error) || errorDescription.contains("Email is not verified")) {
-//                                return Mono.error(new RuntimeException("EMAIL_NOT_VERIFIED"));
-//                            } else {
-//                                return Mono.error(new RuntimeException("KEYCLOAK_AUTH_FAILED: " + errorDescription));
-//                            }
-//                        }))
-//                // FIX: Change method reference to lambda for instance method
-//                .onStatus(HttpStatusCode::is5xxServerError, clientResponse -> // CORRECTED LINE
-//                        clientResponse.bodyToMono(String.class).<Throwable>flatMap(errorBody -> {
-//                            LOG.error("Keycloak LOGin server error for {}: Status={}, Body={}", LOGinRequest.getEmail(), clientResponse.statusCode(), errorBody);
-//                            return Mono.error(new RuntimeException("KEYCLOAK_SERVER_ERROR"));
-//                        })).bodyToMono(JsonNode.class).map(jsonNode -> {
-//                    String accessToken = jsonNode.has("access_token") ? jsonNode.get("access_token").asText() : null;
-//                    String tokenType = jsonNode.has("token_type") ? jsonNode.get("token_type").asText() : null;
-//                    long expiresIn = jsonNode.has("expires_in") ? jsonNode.get("expires_in").asLong() : 0;
-//
-//                    String message = String.format("LOGin successful. Token type: %s, Expires in: %d seconds. (Access token is %s...)", tokenType, expiresIn, accessToken != null && accessToken.length() > 10 ? accessToken.substring(0, 10) : "N/A");
-//                    LOG.info("{}", message);
-//                    return new GenericResponse(message);
-//                }).onErrorResume(RuntimeException.class, e -> {
-//                    String message;
-//                    String status = "FAILED";
-//
-//                    switch (e.getMessage()) {
-//                        case "INVALID_CREDENTIALS":
-//                            message = "Invalid email or password.";
-//                            break;
-//                        case "EMAIL_NOT_VERIFIED":
-//                            message = "Email not verified. Please check your inbox for a verification link.";
-//                            break;
-//                        case "KEYCLOAK_SERVER_ERROR":
-//                            message = "Keycloak server error during LOGin. Please try again later.";
-//                            break;
-//                        case "KEYCLOAK_AUTH_FAILED":
-//                            message = "Authentication failed due to Keycloak error.";
-//                            break;
-//                        default:
-//                            message = "An unexpected error occurred during LOGin. Please contact support.";
-//                            LOG.error("Unhandled error during LOGin: {}", e.getMessage(), e);
-//                            break;
-//                    }
-//                    return Mono.just(new GenericResponse(message));
-//                });
-//    }
+        // 3. If user exists and is verified, get access and refresh token
+        MultiValueMap<String, String> formParam = new LinkedMultiValueMap<>();
+        formParam.put("grant_type", Collections.singletonList("password"));
+        formParam.put("client_id", Collections.singletonList(keycloakClientId));
+        formParam.put("client_secret", Collections.singletonList(keycloakClientSecret));
+        formParam.put("username", Collections.singletonList(loginRequest.email()));
+        formParam.put("password", Collections.singletonList(loginRequest.password()));
+
+        Map<String, Object> tokenResponse = keycloakTokenFeignClient.getToken(keycloakRealm, formParam);
+        LOGGER.info("Token response: {}", tokenResponse);
+        String accessToken = tokenResponse.get("access_token") != null ? tokenResponse.get("access_token").toString() : null;
+        String refreshToken = tokenResponse.get("refresh_token") != null ? tokenResponse.get("refresh_token").toString() : null;
+
+        if (accessToken == null) {
+            LOGGER.warn("Login failed: Invalid credentials for {}", loginRequest.email());
+            return new LoginStatus(LoginState.INVALID_CREDENTIALS, Optional.empty(), Optional.empty());
+        }
+        return new LoginStatus(LoginState.LOGGED_IN, Optional.of(accessToken), Optional.ofNullable(refreshToken));
+    }
 }

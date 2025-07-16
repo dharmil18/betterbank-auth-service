@@ -3,17 +3,17 @@ package com.betterbank.dto.response;
 import java.time.LocalDateTime;
 import java.util.List;
 
-public record ErrorResponse(
+public record ValidationErrorResponse(
         int status,
         String message,
         List<ValidationError> errors,
         LocalDateTime timestamp
 ) {
-    public ErrorResponse(int status, String message, List<ValidationError> errors) {
+    public ValidationErrorResponse(int status, String message, List<ValidationError> errors) {
         this(status, message, errors, LocalDateTime.now());
     }
 
-    public ErrorResponse(int status, String message) {
+    public ValidationErrorResponse(int status, String message) {
         this(status, message, List.of(), LocalDateTime.now());
     }
 

@@ -1,7 +1,10 @@
 package com.betterbank.controller;
 
+import com.betterbank.dto.request.LoginRequest;
 import com.betterbank.dto.request.RegisterRequest;
 import com.betterbank.dto.response.GenericResponse;
+import com.betterbank.dto.response.LoginResponse;
+import com.betterbank.dto.response.LoginState;
 import com.betterbank.dto.response.RegistrationOutcome;
 import com.betterbank.service.AuthService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,11 +27,6 @@ public class AuthController {
         this.authService = authService;
     }
 
-    @GetMapping("/test")
-    public ResponseEntity<String> test() {
-        LOGGER.info("Handling request for /api/auth/test");
-        return ResponseEntity.ok("Auth service is working!");
-    }
 
     @PostMapping("/register")
     public ResponseEntity<GenericResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
@@ -44,38 +42,20 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
+        LOGGER.info("Handling request for /api/auth/login");
 
-//    @PostMapping("/register")
-//    public Mono<ResponseEntity<GenericResponse>> registerUser(@Valid @RequestBody Mono<RegisterRequest> registerRequest) {
-//        System.out.println();
-//        log.info("Handling request for /api/auth/register");
-//
-//        return registerRequest.flatMap(request -> {
-//            return authService.register(request).map(outcome -> {
-//                switch (outcome) {
-//                    case USER_EXISTS:
-//                        return ResponseEntity.accepted().body(new GenericResponse("User already exists. Try with another email."));
-//
-//                    case INITIATED_ASYNC_PROCESS:
-//                        return ResponseEntity.ok().body(new GenericResponse("Registration initiated. Please check your email to verify & complete the process."));
-//
-//                    case AUTH_PROVIDER_ERROR:
-//                        return ResponseEntity.internalServerError().body(new GenericResponse("Authentication provider error. Please try again."));
-//
-//                    default:
-//                        log.warn("Unknown registration outcome for {}: {}", request.getEmail(), outcome);
-//                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new GenericResponse("An unexpected error occurred during registration."));
-//                }
-//            }).onErrorResume(error -> {
-//                log.error("Registration failed for {}: {}", request.getEmail(), error.getMessage());
-//                return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new GenericResponse("Registration failed. Please try again.")));
-//            });
-//        });
-//    }
+        LoginResponse loginResponse = authService.login(loginRequest);
 
-//    @PostMapping("/login")
-//    public Mono<GenericResponse> loginUser(@RequestBody LoginRequest user) {
-//        log.info("Handling request for /api/auth/login");
-//        return authService.login(user);
-//    }
+        if (loginResponse.loginState() == LoginState.INVALID_CREDENTIALS) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(loginResponse);
+        } else if (loginResponse.loginState() == LoginState.EMAIL_NOT_VERIFIED) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(loginResponse);
+        } else if (loginResponse.loginState() == LoginState.SERVER_ERROR) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(loginResponse);
+        }
+
+        return ResponseEntity.status(HttpStatus.OK).body(loginResponse);
+    }
 }

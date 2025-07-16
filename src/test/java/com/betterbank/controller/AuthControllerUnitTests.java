@@ -1,6 +1,5 @@
-package com.betterbank;
+package com.betterbank.controller;
 
-import com.betterbank.controller.AuthController;
 import com.betterbank.dto.request.RegisterRequest;
 import com.betterbank.dto.response.GenericResponse;
 import com.betterbank.dto.response.RegistrationOutcome;
@@ -39,16 +38,6 @@ public class AuthControllerUnitTests {
         MockitoAnnotations.openMocks(this);
     }
 
-
-    @Test
-    void testEndpointShouldReturnSuccess() {
-        // When
-        ResponseEntity<String> response = mockAuthController.test();
-
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(response.getBody()).isEqualTo("Auth service is working!");
-    }
 
     @Test
     void register_ShouldReturnCreated_WhenInitiatedAsyncProcess() {
